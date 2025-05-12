@@ -1,41 +1,129 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# Dependency directories
+node_modules/
+.pnp/
+.pnp.js
 
-# dependencies
-/node_modules
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
+# Next.js build output
+.next/
+out/
+build/
 
-# testing
-/coverage
-
-# next.js
-/.next/
-/out/
-
-# production
-/build
-
-# misc
+# Temporary files
+*.log
+*.swp
 .DS_Store
-*.pem
+Thumbs.db
 
-# debug
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Vercel
+.vercel
+
+# TypeScript v1 compiled files
+*.tsbuildinfo
+
+# Debugging
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# Testing
+/coverage
+*.lcov
 
-# vercel
-.vercel
+# IDEs and editors
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
 
-# typescript
-*.tsbuildinfo
-next-env.d.ts
+# Backup files
+*.bak
+*.gho
+*.ori
+*.orig
+*.tmp
+
+# Misc
+.cache/
+.parcel-cache/
+.svelte-kit/
+
+# Turborepo
+.turbo/
+
+# Playwright test results
+/test-results/
+/playwright-report/
+/playwright/.cache/
+
+# Cypress
+cypress/screenshots/
+cypress/videos/
+
+# Storybook
+storybook-static/
+
+# Package managers
+pnpm-lock.yaml
+yarn.lock
+package-lock.json
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Logs
+logs
+
+# Output of npm
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Optional REPL history
+.node_repl_history
+
+# Mac files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Thumbnails
+._*
+
+# Windows thumbnail cache files
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+
+# Dump file
+*.stackdump
+
+# Folder config file
+[Dd]esktop.ini
+
+# Local history
+.history/
+.ionide/
+
+# Fall-through files from text editors
+*~
+*.swp
+*.swo
+
+# Application specific ignore files
+# Add any project-specific files/directories here
+/uploads/
+/generated/
