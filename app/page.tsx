@@ -65,15 +65,46 @@ const CodeGenerator = () => {
     }
   };
 
-  const handleCopyCode = () => {
+  const handleCopyCode = async () => {
     if (generatedCode) {
-      navigator.clipboard.writeText(generatedCode);
-      setIsCopied(true);
+      try {
+        // Check if clipboard API is available
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(generatedCode);
+          setIsCopied(true);
 
-      // Reset the icon back to "Copy Code" after 2 seconds
-      setTimeout(() => {
-        setIsCopied(false);
-      }, 2000);
+          // Reset the text back to "Copy Code" after 2 seconds
+          setTimeout(() => {
+            setIsCopied(false);
+          }, 2000);
+        } else {
+          // Fallback for older browsers or non-secure contexts
+          const textArea = document.createElement("textarea");
+          textArea.value = generatedCode;
+          textArea.style.position = "fixed";
+          textArea.style.left = "-999999px";
+          textArea.style.top = "-999999px";
+          document.body.appendChild(textArea);
+          textArea.focus();
+          textArea.select();
+
+          try {
+            document.execCommand("copy");
+            setIsCopied(true);
+            setTimeout(() => {
+              setIsCopied(false);
+            }, 2000);
+          } catch (copyError) {
+            console.error("Failed to copy text: ", copyError);
+            setError("Failed to copy code to clipboard");
+          }
+
+          document.body.removeChild(textArea);
+        }
+      } catch (error) {
+        console.error("Failed to copy: ", error);
+        setError("Failed to copy code to clipboard");
+      }
     }
   };
 
