@@ -47,7 +47,7 @@ function calculateTokenUsage(usage: any) {
   };
 }
 
-async function extractComponentMetadata(componentName: string) {
+async function getComponentMetadata(componentName: string) {
   try {
     const docPath = path.join(
       COMPONENTS_DIR,
@@ -116,7 +116,7 @@ async function getAllComponentsMetadata() {
 
   await Promise.all(
     components.map(async (component) => {
-      const meta = await extractComponentMetadata(component);
+      const meta = await getComponentMetadata(component);
       if (meta) {
         metadata[component] = meta;
       }
@@ -148,7 +148,7 @@ async function getComponentDocs(componentName: string) {
   }
 }
 
-async function getComponentsDocsBatch(input: { componentNames: string[] }) {
+async function getSelectedComponentsDocs(input: { componentNames: string[] }) {
   const { componentNames } = input;
   const docsObject: Record<string, string> = {};
 
@@ -164,6 +164,20 @@ async function getComponentsDocsBatch(input: { componentNames: string[] }) {
 
   return JSON.stringify(docsObject, null, 2);
 }
+
+// Tool functions
+const functions = {
+  get_all_components_metadata: getAllComponentsMetadata,
+  select_components: (input: { selectedComponents: string[] }) => {
+    console.log(
+      `✅ Selected components: ${input.selectedComponents.join(", ")}`
+    );
+    return `You have selected: ${input.selectedComponents.join(
+      ", "
+    )}. Now proceed to get full documentation for ALL these components at once using get_selected_components_docs.`;
+  },
+  get_selected_components_docs: getSelectedComponentsDocs,
+};
 
 // Tool definitions
 const getAllComponentsMetadataTool = {
@@ -194,8 +208,8 @@ const selectComponentsTool = {
   },
 };
 
-const getComponentsDocsBatchTool = {
-  name: "get_components_docs_batch",
+const getSelectedComponentsDocsTool = {
+  name: "get_selected_components_docs",
   description:
     "Gets full documentation for multiple components at once. PREFERRED way to get docs for the components you selected.",
   input_schema: {
@@ -214,7 +228,7 @@ const getComponentsDocsBatchTool = {
 const tools = [
   getAllComponentsMetadataTool,
   selectComponentsTool,
-  getComponentsDocsBatchTool,
+  getSelectedComponentsDocsTool,
 ];
 
 const systemPrompt = `You are a React and React Native expert specializing in the provided design system.
@@ -222,7 +236,7 @@ const systemPrompt = `You are a React and React Native expert specializing in th
       STRICT WORKFLOW (follow in order):
       1. Use the get_all_components_metadata tool to see titles and descriptions
       2. Use the select_components tool to explicitly select which components you need
-      3. Use the get_components_docs_batch tool ONLY for the components you selected
+      3. Use the get_selected_components_docs tool ONLY for the components you selected
       4. Generate the React component code
       
       REQUIREMENTS:
@@ -246,20 +260,6 @@ const systemPrompt = `You are a React and React Native expert specializing in th
       CRITICAL: You MUST generate COMPLETE and RUNNABLE code. Do not truncate or abbreviate any part of the implementation. If the component is large, focus on generating a complete, working version rather than including every possible feature.
       
       IMPORTANT: When generating code, do not truncate or skip any parts. Generate the complete implementation. If the code is long, generate it entirely rather than using placeholders or comments like "// rest of the code" or "...".`;
-
-// Tool functions
-const functions = {
-  get_all_components_metadata: getAllComponentsMetadata,
-  select_components: (input: { selectedComponents: string[] }) => {
-    console.log(
-      `✅ Selected components: ${input.selectedComponents.join(", ")}`
-    );
-    return `You have selected: ${input.selectedComponents.join(
-      ", "
-    )}. Now proceed to get full documentation for ALL these components at once using get_components_docs_batch.`;
-  },
-  get_components_docs_batch: getComponentsDocsBatch,
-};
 
 // State management for the API
 interface ConversationState {
@@ -420,7 +420,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       code: codeOnly,
       tokenUsage,
-      availableComponents,
       success: true,
     });
   } catch (error: any) {
