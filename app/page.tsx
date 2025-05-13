@@ -54,65 +54,50 @@ const CodeGenerator = () => {
   // Function to prepare code for React Live
   const prepareCodeForLivePreview = (code: string): string => {
     try {
-      // Step 1: Remove all imports
-      let cleanedCode = code.replace(/^import\s+.*?;\s*$/gm, "");
+      // Step 1: Remove all imports (including multi-line imports)
+      let cleanedCode = code.replace(
+        /import\s+[\s\S]*?from\s+['"][^'"]+['"];?\s*/g,
+        ""
+      );
 
-      // Step 2: Remove export default statements but keep the component
-      cleanedCode = cleanedCode.replace(/^export\s+default\s+/gm, "");
+      // Step 2: Remove export statements
+      cleanedCode = cleanedCode.replace(/export\s+default\s+/g, "");
+      cleanedCode = cleanedCode.replace(/export\s+/g, "");
 
-      // Step 3: Remove other export statements
-      cleanedCode = cleanedCode.replace(/^export\s+(?!default).*?;\s*$/gm, "");
+      // Step 3: Clean up empty lines
+      cleanedCode = cleanedCode.trim();
 
-      // Step 4: Trim extra whitespace and empty lines
-      cleanedCode = cleanedCode
-        .split("\n")
-        .filter((line) => line.trim() !== "")
-        .join("\n")
-        .trim();
-
-      // Step 5: Check if code already has render call
+      // Step 4: If code already has render, return as is
       if (cleanedCode.includes("render(")) {
-        console.log("Code already has render call");
         return cleanedCode;
       }
 
-      // Step 6: Find the main component name
-      // Look for function components: const ComponentName = () => or function ComponentName()
-      const componentMatches = [
-        ...cleanedCode.matchAll(/const\s+(\w+)\s*=\s*\([^)]*\)\s*=>/g),
-        ...cleanedCode.matchAll(/function\s+(\w+)\s*\(/g),
-        ...cleanedCode.matchAll(/const\s+(\w+)\s*=\s*function/g),
-      ];
+      // Step 5: Look for React component (starts with capital letter)
+      // This regex specifically looks for components that start with capital letters
+      const componentRegex =
+        /(?:const|function|let)\s+([A-Z][a-zA-Z0-9]*)\s*[=(:]/;
+      const match = cleanedCode.match(componentRegex);
 
-      if (componentMatches.length > 0) {
-        // Get the last component defined (usually the main one)
-        const mainComponent = componentMatches[componentMatches.length - 1][1];
-
-        // Add render call for the main component
-        const finalCode = `${cleanedCode}\n\nrender(<${mainComponent} />);`;
-        console.log(`Component found: ${mainComponent}`);
+      if (match) {
+        const componentName = match[1];
+        const finalCode = `${cleanedCode}\n\nrender(<${componentName} />);`;
+        console.log("Generated code (with component):", finalCode);
         return finalCode;
       }
 
-      // Step 7: Check if it's a direct JSX return
-      if (cleanedCode.trim().startsWith("return")) {
-        const componentCode = `const Component = () => {\n${cleanedCode}\n};\n\nrender(<Component />);`;
-        console.log("Wrapped return statement in component");
-        return componentCode;
-      }
-
-      // Step 8: Check if it starts with JSX directly
+      // Step 6: If it's JSX without a component wrapper
       if (cleanedCode.trim().startsWith("<")) {
         const finalCode = `render(${cleanedCode});`;
-        console.log("Direct JSX found");
+        console.log("Generated code (direct JSX):", finalCode);
         return finalCode;
       }
 
-      // Step 9: If we can't determine the structure, try to wrap it
-      console.log("Unable to determine structure, wrapping in render");
-      return `render(${cleanedCode});`;
+      // Step 7: Default case - wrap in render
+      const finalCode = `render(${cleanedCode});`;
+      console.log("Generated code (default):", finalCode);
+      return finalCode;
     } catch (error) {
-      console.error("Error preparing code for preview:", error);
+      console.error("Error preparing code:", error);
       return code;
     }
   };
