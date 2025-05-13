@@ -1,5 +1,21 @@
 "use client";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, Suspense } from "react";
+import dynamic from "next/dynamic";
+import { scope } from "@/lib/scope";
+
+// Dynamically import React Live components to avoid SSR issues
+const LiveProvider = dynamic(
+  () => import("react-live").then((mod) => mod.LiveProvider),
+  { ssr: false }
+);
+const LiveError = dynamic(
+  () => import("react-live").then((mod) => mod.LiveError),
+  { ssr: false }
+);
+const LivePreview = dynamic(
+  () => import("react-live").then((mod) => mod.LivePreview),
+  { ssr: false }
+);
 
 interface TokenUsage {
   inputTokens: number;
@@ -14,6 +30,7 @@ interface ApiResponse {
   tokenUsage: TokenUsage;
   availableComponents: string[];
   success: boolean;
+  error?: string;
 }
 
 interface QueryHistory {
@@ -30,8 +47,75 @@ const CodeGenerator = () => {
   const [hasGenerated, setHasGenerated] = useState(false);
   const [queryHistory, setQueryHistory] = useState<QueryHistory[]>([]);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
+  const [showPreview, setShowPreview] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const lastQueryRef = useRef<HTMLDivElement>(null);
+
+  // Function to prepare code for React Live
+  const prepareCodeForLivePreview = (code: string): string => {
+    try {
+      // Step 1: Remove all imports
+      let cleanedCode = code.replace(/^import\s+.*?;\s*$/gm, "");
+
+      // Step 2: Remove export default statements but keep the component
+      cleanedCode = cleanedCode.replace(/^export\s+default\s+/gm, "");
+
+      // Step 3: Remove other export statements
+      cleanedCode = cleanedCode.replace(/^export\s+(?!default).*?;\s*$/gm, "");
+
+      // Step 4: Trim extra whitespace and empty lines
+      cleanedCode = cleanedCode
+        .split("\n")
+        .filter((line) => line.trim() !== "")
+        .join("\n")
+        .trim();
+
+      // Step 5: Check if code already has render call
+      if (cleanedCode.includes("render(")) {
+        console.log("Code already has render call");
+        return cleanedCode;
+      }
+
+      // Step 6: Find the main component name
+      // Look for function components: const ComponentName = () => or function ComponentName()
+      const componentMatches = [
+        ...cleanedCode.matchAll(/const\s+(\w+)\s*=\s*\([^)]*\)\s*=>/g),
+        ...cleanedCode.matchAll(/function\s+(\w+)\s*\(/g),
+        ...cleanedCode.matchAll(/const\s+(\w+)\s*=\s*function/g),
+      ];
+
+      if (componentMatches.length > 0) {
+        // Get the last component defined (usually the main one)
+        const mainComponent = componentMatches[componentMatches.length - 1][1];
+
+        // Add render call for the main component
+        const finalCode = `${cleanedCode}\n\nrender(<${mainComponent} />);`;
+        console.log(`Component found: ${mainComponent}`);
+        return finalCode;
+      }
+
+      // Step 7: Check if it's a direct JSX return
+      if (cleanedCode.trim().startsWith("return")) {
+        const componentCode = `const Component = () => {\n${cleanedCode}\n};\n\nrender(<Component />);`;
+        console.log("Wrapped return statement in component");
+        return componentCode;
+      }
+
+      // Step 8: Check if it starts with JSX directly
+      if (cleanedCode.trim().startsWith("<")) {
+        const finalCode = `render(${cleanedCode});`;
+        console.log("Direct JSX found");
+        return finalCode;
+      }
+
+      // Step 9: If we can't determine the structure, try to wrap it
+      console.log("Unable to determine structure, wrapping in render");
+      return `render(${cleanedCode});`;
+    } catch (error) {
+      console.error("Error preparing code for preview:", error);
+      return code;
+    }
+  };
 
   // Scroll to the latest query when a new one is added
   useEffect(() => {
@@ -57,6 +141,7 @@ const CodeGenerator = () => {
     setGeneratedCode("");
     setIsCopied(false);
     setHasGenerated(true);
+    setShowPreview(false); // Start with code view while generating
 
     try {
       const response = await fetch("/api/generate-code", {
@@ -81,6 +166,8 @@ const CodeGenerator = () => {
         updated[tempIndex] = { query: currentQuery, code: data.code };
         return updated;
       });
+
+      // Don't automatically switch to preview mode - let user do it manually
 
       // console.log("data.tokenUsage", data.tokenUsage);
     } catch (error) {
@@ -142,6 +229,8 @@ const CodeGenerator = () => {
   const handleQueryClick = (index: number) => {
     setSelectedIndex(index);
     setGeneratedCode(queryHistory[index].code);
+    // Show preview when clicking on a completed query
+    setShowPreview(queryHistory[index].code !== "");
   };
 
   // Initial layout - centered
@@ -184,6 +273,38 @@ const CodeGenerator = () => {
     const lines = code.split("\n");
     return lines.slice(0, 2).join("\n");
   };
+
+  // Toggle switch component
+  const ToggleSwitch = () => (
+    <div className="flex items-center space-x-3">
+      <span
+        className={`text-sm font-medium ${
+          !showPreview ? "text-gray-900" : "text-gray-500"
+        }`}
+      >
+        Code
+      </span>
+      <button
+        onClick={() => setShowPreview(!showPreview)}
+        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+          showPreview ? "bg-blue-600" : "bg-gray-300"
+        }`}
+      >
+        <span
+          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+            showPreview ? "translate-x-6" : "translate-x-1"
+          }`}
+        />
+      </button>
+      <span
+        className={`text-sm font-medium ${
+          showPreview ? "text-gray-900" : "text-gray-500"
+        }`}
+      >
+        Preview
+      </span>
+    </div>
+  );
 
   // Split layout - after generation
   return (
@@ -292,13 +413,15 @@ const CodeGenerator = () => {
         </div>
       </div>
 
-      {/* Right side - Generated code */}
+      {/* Right side - Generated code or preview */}
       <div className="w-1/2 bg-white border-l border-gray-300 flex flex-col h-screen">
         <div className="p-6 pb-0">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-semibold text-gray-700">
               {isLoading && selectedIndex === queryHistory.length - 1
                 ? "Generating codebase..."
+                : showPreview
+                ? "Live Preview"
                 : "Generated Code"}
               {selectedIndex !== -1 && !isLoading && (
                 <span className="text-sm text-gray-500 ml-2">
@@ -306,27 +429,60 @@ const CodeGenerator = () => {
                 </span>
               )}
             </h2>
-            <button
-              onClick={handleCopyCode}
-              disabled={!generatedCode || isLoading}
-              className={`px-4 py-2 rounded transition ${
-                isCopied
-                  ? "bg-green-600 text-white"
-                  : "bg-gray-600 text-white hover:bg-gray-700 disabled:opacity-50"
-              }`}
-            >
-              {isCopied ? "Copied" : "Copy Code"}
-            </button>
+            <div className="flex items-center space-x-4">
+              {generatedCode && !isLoading && <ToggleSwitch />}
+              {generatedCode && !isLoading && !showPreview && (
+                <button
+                  onClick={handleCopyCode}
+                  className={`px-4 py-2 rounded transition ${
+                    isCopied
+                      ? "bg-green-600 text-white"
+                      : "bg-gray-600 text-white hover:bg-gray-700"
+                  }`}
+                >
+                  {isCopied ? "Copied" : "Copy Code"}
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
         <div className="flex-grow px-6 pb-6 overflow-hidden">
           {generatedCode ? (
-            <div className="bg-gray-50 border border-gray-200 rounded-lg h-full p-4 overflow-y-auto">
-              <pre className="text-sm font-mono text-black whitespace-pre-wrap">
-                {generatedCode}
-              </pre>
-            </div>
+            showPreview ? (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg h-full overflow-hidden">
+                <Suspense
+                  fallback={
+                    <div className="flex items-center justify-center h-full">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+                    </div>
+                  }
+                >
+                  <LiveProvider
+                    code={prepareCodeForLivePreview(generatedCode)}
+                    scope={scope}
+                    noInline
+                    theme={{
+                      plain: {
+                        backgroundColor: "#ffffff",
+                      },
+                      styles: [],
+                    }}
+                  >
+                    <div className="h-full p-4 overflow-y-auto bg-white">
+                      <LivePreview />
+                      <LiveError className="text-red-600 text-sm mb-4" />
+                    </div>
+                  </LiveProvider>
+                </Suspense>
+              </div>
+            ) : (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg h-full p-4 overflow-y-auto">
+                <pre className="text-sm font-mono text-black whitespace-pre-wrap">
+                  {generatedCode}
+                </pre>
+              </div>
+            )
           ) : isLoading && selectedIndex === queryHistory.length - 1 ? (
             <div className="h-full flex items-center justify-center">
               <div className="text-center">
