@@ -95,13 +95,6 @@ const CodeGenerator = () => {
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey && !isLoading) {
-      e.preventDefault();
-      handleGenerate();
-    }
-  };
-
   const handleCopyCode = async () => {
     if (generatedCode) {
       try {
@@ -164,7 +157,12 @@ const CodeGenerator = () => {
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              onKeyPress={handleKeyPress}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey && !isLoading) {
+                  e.preventDefault();
+                  handleGenerate();
+                }
+              }}
               placeholder="Enter your code generation prompt"
               className="flex-grow p-3 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
             />
@@ -195,7 +193,7 @@ const CodeGenerator = () => {
         {/* Query history section */}
         <div className="flex-grow flex flex-col overflow-hidden">
           <div className="p-6 pb-0">
-            <h2 className="text-lg font-bold text-gray-800 mb-4 bg-blue-600 text-white px-4 py-2 rounded-md">
+            <h2 className="text-lg font-bold text-gray-800 mb-4 bg-blue-600 px-4 py-2 rounded-md">
               User Inputs
             </h2>
           </div>
@@ -268,7 +266,12 @@ const CodeGenerator = () => {
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              onKeyPress={handleKeyPress}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey && !isLoading) {
+                  e.preventDefault();
+                  handleGenerate();
+                }
+              }}
               placeholder="Enter your code generation prompt"
               className="flex-grow p-3 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black bg-white"
             />
