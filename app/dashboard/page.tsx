@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef, Suspense } from "react";
 import dynamic from "next/dynamic";
 import { scope } from "@/lib/scope";
 import SignOutButton from "@/components/auth/SignOutButton";
+import { useSession } from "next-auth/react";
 
 // Dynamically import React Live components to avoid SSR issues
 const LiveProvider = dynamic(
@@ -35,22 +36,85 @@ interface ApiResponse {
 }
 
 interface QueryHistory {
+  id?: string;
   query: string;
   code: string;
+  createdAt?: string;
 }
 
 export default function CodeGenerator() {
+  const { data: session } = useSession();
   const [query, setQuery] = useState("");
   const [generatedCode, setGeneratedCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [isCopied, setIsCopied] = useState(false);
-  const [hasGenerated, setHasGenerated] = useState(false);
+  const [hasGenerated, setHasGenerated] = useState(true); // Default to true to show the split view
   const [queryHistory, setQueryHistory] = useState<QueryHistory[]>([]);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const [showPreview, setShowPreview] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false); // New state to track initial load
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const lastQueryRef = useRef<HTMLDivElement>(null);
+
+  // Fetch user's query history on load
+  useEffect(() => {
+    if (session?.user?.email) {
+      fetchUserQueries();
+    }
+  }, [session]);
+
+  const fetchUserQueries = async () => {
+    setIsLoadingHistory(true);
+    try {
+      const response = await fetch("/api/get-queries");
+      const data = await response.json();
+
+      if (data.success) {
+        if (data.queries?.length > 0) {
+          // Reverse the order of queries - oldest first, newest last
+          const reversedQueries = [...data.queries].reverse();
+          setQueryHistory(reversedQueries);
+          setHasGenerated(true); // Ensure we show the split view
+        } else {
+          // Only set hasGenerated to false if we've confirmed there are no queries
+          setHasGenerated(false);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch query history:", error);
+      // Keep hasGenerated as true in case of error to show the split view
+    } finally {
+      setIsLoadingHistory(false);
+      setInitialLoadComplete(true); // Mark initial load as complete
+    }
+  };
+
+  // Function to save query to the database
+  const saveQuery = async (queryText: string, codeResult: string) => {
+    try {
+      const response = await fetch("/api/save-query", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          query: queryText,
+          code: codeResult,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        console.error("Failed to save query:", data.error);
+      }
+      return data;
+    } catch (error) {
+      console.error("Error saving query:", error);
+      return null;
+    }
+  };
 
   // Function to prepare code for React Live
   const prepareCodeForLivePreview = (code: string): string => {
@@ -109,10 +173,21 @@ export default function CodeGenerator() {
     setQuery("");
 
     // Immediately add the query to history with empty code
-    const tempIndex = queryHistory.length;
+    // Add to the END of the array (newest at bottom)
     const tempQuery = { query: currentQuery, code: "" };
-    setQueryHistory([...queryHistory, tempQuery]);
-    setSelectedIndex(tempIndex);
+
+    // Important: Update the state first safely
+    setQueryHistory((prev) => {
+      const newHistory = [...prev, tempQuery];
+      const newIndex = newHistory.length - 1;
+
+      // Use setTimeout to ensure this runs after state update
+      setTimeout(() => {
+        setSelectedIndex(newIndex);
+      }, 0);
+
+      return newHistory;
+    });
 
     // Reset previous state
     setIsLoading(true);
@@ -139,22 +214,25 @@ export default function CodeGenerator() {
 
       setGeneratedCode(data.code);
 
-      // Update the query history with the actual code
+      // Update the query history with the actual code at the last position
       setQueryHistory((prev) => {
-        const updated = [...prev];
-        updated[tempIndex] = { query: currentQuery, code: data.code };
-        return updated;
+        const lastIndex = prev.length - 1;
+        if (lastIndex >= 0) {
+          const updated = [...prev];
+          updated[lastIndex] = { ...updated[lastIndex], code: data.code };
+          return updated;
+        }
+        return prev;
       });
 
-      // Don't automatically switch to preview mode - let user do it manually
-
-      // console.log("data.tokenUsage", data.tokenUsage);
+      // Save the query to the database
+      await saveQuery(currentQuery, data.code);
     } catch (error) {
       setError(
         error instanceof Error ? error.message : "An unknown error occurred"
       );
       // Remove the query from history if there was an error
-      setQueryHistory((prev) => prev.slice(0, -1));
+      setQueryHistory((prev) => prev.slice(0, -1)); // Remove the last item (which was just added)
       setSelectedIndex(-1);
     } finally {
       setIsLoading(false);
@@ -218,6 +296,24 @@ export default function CodeGenerator() {
     return lines.slice(0, 2).join("\n");
   };
 
+  // Format date for display
+  const formatDate = (dateString: string | undefined) => {
+    if (!dateString) return "";
+
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+    } catch (e) {
+      console.error("Error formatting date:", e);
+      return "";
+    }
+  };
+
   // Toggle switch component
   const ToggleSwitch = () => (
     <div className="flex items-center space-x-3">
@@ -253,10 +349,48 @@ export default function CodeGenerator() {
   // Scroll to the latest query when a new one is added
   useEffect(() => {
     if (lastQueryRef.current && scrollContainerRef.current) {
-      lastQueryRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+      // Use a small timeout to ensure DOM has updated
+      setTimeout(() => {
+        lastQueryRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "end",
+        });
+      }, 100);
     }
   }, [queryHistory.length]);
 
+  // Show loading spinner while initial load is happening
+  if (!initialLoadComplete) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex flex-col">
+        <header className="bg-white shadow-sm border-b border-gray-200">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between items-center h-16">
+              <div className="flex items-center space-x-4">
+                <h1 className="text-xl font-semibold text-gray-900">
+                  Code Generation Tool
+                </h1>
+                {session?.user?.email && (
+                  <span className="text-sm text-gray-500">
+                    ({session.user.email})
+                  </span>
+                )}
+              </div>
+              <SignOutButton />
+            </div>
+          </div>
+        </header>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading your history...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Only show welcome screen if we've confirmed there are no queries
   if (!hasGenerated) {
     return (
       <div className="min-h-screen bg-gray-100 flex flex-col">
@@ -264,9 +398,16 @@ export default function CodeGenerator() {
         <header className="bg-white shadow-sm border-b border-gray-200">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-16">
-              <h1 className="text-xl font-semibold text-gray-900">
-                Code Generation Tool
-              </h1>
+              <div className="flex items-center space-x-4">
+                <h1 className="text-xl font-semibold text-gray-900">
+                  Code Generation Tool
+                </h1>
+                {session?.user?.email && (
+                  <span className="text-sm text-gray-500">
+                    ({session.user.email})
+                  </span>
+                )}
+              </div>
               <SignOutButton />
             </div>
           </div>
@@ -278,28 +419,35 @@ export default function CodeGenerator() {
             <h1 className="text-3xl font-bold text-center mb-6 text-gray-800">
               Welcome to Code Generator
             </h1>
-            <div className="flex mb-4">
-              <input
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey && !isLoading) {
-                    e.preventDefault();
-                    handleGenerate();
-                  }
-                }}
-                placeholder="Enter your code generation prompt"
-                className="flex-grow p-3 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-              />
-              <button
-                onClick={handleGenerate}
-                disabled={isLoading || !query.trim()}
-                className="bg-blue-500 text-white px-6 py-3 rounded-r-lg hover:bg-blue-600 transition duration-300 disabled:opacity-50"
-              >
-                {isLoading ? "Generating..." : "Generate"}
-              </button>
-            </div>
+
+            {isLoadingHistory ? (
+              <div className="flex justify-center my-8">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+              </div>
+            ) : (
+              <div className="flex mb-4">
+                <input
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey && !isLoading) {
+                      e.preventDefault();
+                      handleGenerate();
+                    }
+                  }}
+                  placeholder="Enter your code generation prompt"
+                  className="flex-grow p-3 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+                />
+                <button
+                  onClick={handleGenerate}
+                  disabled={isLoading || !query.trim()}
+                  className="bg-blue-500 text-white px-6 py-3 rounded-r-lg hover:bg-blue-600 transition duration-300 disabled:opacity-50"
+                >
+                  {isLoading ? "Generating..." : "Generate"}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -313,9 +461,16 @@ export default function CodeGenerator() {
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <h1 className="text-xl font-semibold text-gray-900">
-              Code Generation Tool
-            </h1>
+            <div className="flex items-center space-x-4">
+              <h1 className="text-xl font-semibold text-gray-900">
+                Code Generation Tool
+              </h1>
+              {session?.user?.email && (
+                <span className="text-sm text-gray-500">
+                  ({session.user.email})
+                </span>
+              )}
+            </div>
             <SignOutButton />
           </div>
         </div>
@@ -328,7 +483,7 @@ export default function CodeGenerator() {
           {/* Query history section */}
           <div className="flex-grow flex flex-col overflow-hidden">
             <div className="p-6 pb-0">
-              <h2 className="text-lg font-bold text-gray-800 mb-4 bg-blue-600 px-4 py-2 rounded-md text-white">
+              <h2 className="text-lg font-bold text-gray-100 mb-4 bg-blue-600 px-4 py-2 rounded-md">
                 User Inputs
               </h2>
             </div>
@@ -342,8 +497,16 @@ export default function CodeGenerator() {
                   className="mb-4 bg-white p-4 rounded-lg shadow-sm"
                   ref={index === queryHistory.length - 1 ? lastQueryRef : null}
                 >
-                  <div className="text-sm text-gray-500 mb-1">
-                    Query {index + 1}:
+                  <div className="flex justify-between items-center mb-1">
+                    <div className="text-sm text-gray-500">
+                      Query {index + 1}:{" "}
+                      {/* Show newest with highest number */}
+                    </div>
+                    {item.createdAt && (
+                      <div className="text-xs text-gray-400">
+                        {formatDate(item.createdAt)}
+                      </div>
+                    )}
                   </div>
                   <div className="font-medium text-gray-800 mb-2">
                     {item.query}
