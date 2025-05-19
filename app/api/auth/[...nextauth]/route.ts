@@ -30,7 +30,7 @@ const authOptions: NextAuthOptions = {
             name: user.name,
             image: user.image,
             createdAt: new Date().toISOString(),
-            requestCount: 0,
+            queriesCountLeft: 1,
             isPaid: false,
           });
           console.log("New user saved to KV:", user.email);

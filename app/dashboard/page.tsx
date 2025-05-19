@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { scope } from "@/lib/scope";
 import SignOutButton from "@/components/auth/SignOutButton";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation"; // Add this import
 
 // Dynamically import React Live components to avoid SSR issues
 const LiveProvider = dynamic(
@@ -43,8 +44,25 @@ interface QueryHistory {
   createdAt?: string;
 }
 
+// Add new interface for user data
+interface UserData {
+  id: string;
+  email: string;
+  name: string;
+  image: string;
+  createdAt: string;
+  queriesCountLeft: number;
+  isPaid: boolean;
+}
+
 // Helper components
-const ToggleSwitch = ({ showPreview, setShowPreview }) => (
+const ToggleSwitch = ({
+  showPreview,
+  setShowPreview,
+}: {
+  showPreview: boolean;
+  setShowPreview: (value: boolean) => void;
+}) => (
   <div className="flex items-center space-x-3">
     <span
       className={`text-sm font-medium ${
@@ -75,7 +93,7 @@ const ToggleSwitch = ({ showPreview, setShowPreview }) => (
   </div>
 );
 
-const LoadingSpinner = ({ text = "Loading..." }) => (
+const LoadingSpinner = ({ text = "Loading..." }: { text?: string }) => (
   <div className="text-center">
     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
     <p className="text-gray-600">{text}</p>
@@ -84,6 +102,8 @@ const LoadingSpinner = ({ text = "Loading..." }) => (
 
 export default function CodeGenerator() {
   const { data: session } = useSession();
+  const router = useRouter(); // Add router for redirecting
+
   // User input states
   const [query, setQuery] = useState("");
   const [generatedCode, setGeneratedCode] = useState("");
@@ -97,6 +117,10 @@ export default function CodeGenerator() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
+  // New state for user data including queriesCountLeft
+  const [userData, setUserData] = useState<UserData | null>(null);
+  const [isLoadingUserData, setIsLoadingUserData] = useState(false);
+
   // History states
   const [queryHistory, setQueryHistory] = useState<QueryHistory[]>([]);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
@@ -105,14 +129,31 @@ export default function CodeGenerator() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const lastQueryRef = useRef<HTMLDivElement>(null);
 
-  // Fetch user's query history on load
+  // Fetch user's query history and user data on load
   useEffect(() => {
     if (session?.user?.email) {
       fetchUserQueries();
+      fetchUserData();
     }
   }, [session]);
 
   // API functions
+  const fetchUserData = async () => {
+    setIsLoadingUserData(true);
+    try {
+      const response = await fetch("/api/get-user-data");
+      const data = await response.json();
+
+      if (data.success && data.userData) {
+        setUserData(data.userData);
+      }
+    } catch (error) {
+      console.error("Failed to fetch user data:", error);
+    } finally {
+      setIsLoadingUserData(false);
+    }
+  };
+
   const fetchUserQueries = async () => {
     setIsLoadingHistory(true);
     try {
@@ -259,6 +300,15 @@ export default function CodeGenerator() {
 
       // Save to database
       await saveQuery(currentQuery, data.code);
+
+      // Update queries count left in frontend state for ALL users
+      // Changed from only updating non-premium users
+      if (userData) {
+        setUserData({
+          ...userData,
+          queriesCountLeft: Math.max(0, userData.queriesCountLeft - 1),
+        });
+      }
     } catch (error) {
       setError(
         error instanceof Error ? error.message : "An unknown error occurred"
@@ -349,7 +399,7 @@ export default function CodeGenerator() {
   }, [queryHistory.length]);
 
   // Loading state
-  if (!initialLoadComplete) {
+  if (!initialLoadComplete || isLoadingUserData) {
     return (
       <div className="min-h-screen bg-gray-100 flex flex-col">
         <header className="bg-white shadow-sm border-b border-gray-200">
@@ -392,6 +442,19 @@ export default function CodeGenerator() {
                     ({session.user.email})
                   </span>
                 )}
+                {userData && userData.isPaid && (
+                  <span className="ml-4 text-sm bg-green-100 text-green-800 px-3 py-1 rounded-full">
+                    Premium User
+                  </span>
+                )}
+                {userData && (
+                  <span className="ml-4 text-sm bg-blue-100 text-blue-800 px-3 py-1 rounded-full">
+                    Queries left:{" "}
+                    <span className="font-bold">
+                      {userData.queriesCountLeft}
+                    </span>
+                  </span>
+                )}
               </div>
               <SignOutButton />
             </div>
@@ -427,13 +490,34 @@ export default function CodeGenerator() {
                   }}
                   placeholder="Enter your code generation prompt"
                   className="flex-grow p-3 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+                  disabled={userData && userData.queriesCountLeft <= 0}
                 />
                 <button
                   onClick={handleGenerate}
-                  disabled={isLoading || !query.trim()}
+                  disabled={
+                    isLoading ||
+                    !query.trim() ||
+                    (userData && userData.queriesCountLeft <= 0)
+                  }
                   className="bg-blue-500 text-white px-6 py-3 rounded-r-lg hover:bg-blue-600 transition duration-300 disabled:opacity-50"
                 >
                   {isLoading ? "Generating..." : "Generate"}
+                </button>
+              </div>
+            )}
+
+            {userData && userData.queriesCountLeft <= 0 && (
+              <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mt-4 flex justify-between items-center">
+                <span>
+                  {userData.isPaid
+                    ? "You have used all your premium queries."
+                    : "You have used all your free queries."}
+                </span>
+                <button
+                  className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition"
+                  onClick={() => router.push("/payment")}
+                >
+                  {userData.isPaid ? "Add More Queries" : "Upgrade Now"}
                 </button>
               </div>
             )}
@@ -457,6 +541,17 @@ export default function CodeGenerator() {
               {session?.user?.email && (
                 <span className="text-sm text-gray-500">
                   ({session.user.email})
+                </span>
+              )}
+              {userData && userData.isPaid && (
+                <span className="ml-4 text-sm bg-green-100 text-green-800 px-3 py-1 rounded-full">
+                  Premium User
+                </span>
+              )}
+              {userData && (
+                <span className="ml-4 text-sm bg-blue-100 text-blue-800 px-3 py-1 rounded-full">
+                  Queries left:{" "}
+                  <span className="font-bold">{userData.queriesCountLeft}</span>
                 </span>
               )}
             </div>
@@ -559,33 +654,55 @@ export default function CodeGenerator() {
 
           {/* Input section at bottom */}
           <div className="p-6 border-t border-gray-200 bg-gray-100">
-            <div className="flex mb-4">
-              <input
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (
-                    e.key === "Enter" &&
-                    !e.shiftKey &&
-                    !isLoading &&
-                    query.trim()
-                  ) {
-                    e.preventDefault();
-                    handleGenerate();
+            {userData && userData.queriesCountLeft <= 0 ? (
+              <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4 flex justify-between items-center">
+                <span>
+                  {userData.isPaid
+                    ? "You have used all your premium queries."
+                    : "You have used all your free queries."}
+                </span>
+                <button
+                  className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition"
+                  onClick={() => router.push("/payment")}
+                >
+                  {userData.isPaid ? "Add More Queries" : "Upgrade Now"}
+                </button>
+              </div>
+            ) : (
+              <div className="flex mb-4">
+                <input
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (
+                      e.key === "Enter" &&
+                      !e.shiftKey &&
+                      !isLoading &&
+                      query.trim() &&
+                      !(userData && userData.queriesCountLeft <= 0)
+                    ) {
+                      e.preventDefault();
+                      handleGenerate();
+                    }
+                  }}
+                  placeholder="Enter your code generation prompt"
+                  className="flex-grow p-3 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black bg-white"
+                  disabled={userData && userData.queriesCountLeft <= 0}
+                />
+                <button
+                  onClick={handleGenerate}
+                  disabled={
+                    isLoading ||
+                    !query.trim() ||
+                    (userData && userData.queriesCountLeft <= 0)
                   }
-                }}
-                placeholder="Enter your code generation prompt"
-                className="flex-grow p-3 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black bg-white"
-              />
-              <button
-                onClick={handleGenerate}
-                disabled={isLoading || !query.trim()}
-                className="bg-blue-500 text-white px-6 py-3 rounded-r-lg hover:bg-blue-600 transition duration-300 disabled:opacity-50"
-              >
-                {isLoading ? "Generating..." : "Generate"}
-              </button>
-            </div>
+                  className="bg-blue-500 text-white px-6 py-3 rounded-r-lg hover:bg-blue-600 transition duration-300 disabled:opacity-50"
+                >
+                  {isLoading ? "Generating..." : "Generate"}
+                </button>
+              </div>
+            )}
 
             {error && (
               <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">

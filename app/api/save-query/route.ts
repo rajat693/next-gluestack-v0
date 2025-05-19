@@ -60,10 +60,10 @@ export async function POST(req: NextRequest) {
     // Save the updated queries
     await kv.set(queriesKey, limitedQueries);
 
-    // Update user's request count
+    // Update user's queries count left
     await kv.set(userKey, {
       ...user,
-      requestCount: ((user as any).requestCount || 0) + 1,
+      queriesCountLeft: ((user as any).queriesCountLeft || 0) - 1,
     });
 
     return NextResponse.json({
