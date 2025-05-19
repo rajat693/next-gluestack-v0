@@ -2,7 +2,7 @@
 import React from "react";
 import { Elements } from "@stripe/react-stripe-js";
 import stripePromise from "@/lib/stripe";
-import CheckoutForm from "@/components/checkout-form";
+import PaymentForm from "@/components/payment-form";
 
 export default function Checkout() {
   return (
@@ -23,7 +23,7 @@ export default function Checkout() {
           </div>
 
           <Elements stripe={stripePromise}>
-            <CheckoutForm amount={19.99} />
+            <PaymentForm amount={19.99} />
           </Elements>
 
           <div className="mt-8 pt-6 border-t border-gray-200 text-center text-xs text-gray-500">

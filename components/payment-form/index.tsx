@@ -9,7 +9,7 @@ interface PaymentResponse {
   client_secret?: string;
 }
 
-const CheckoutForm = ({ amount }: { amount: number }) => {
+const PaymentForm = ({ amount }: { amount: number }) => {
   const [error, setError] = useState<string | null>(null);
   const [processing, setProcessing] = useState<boolean>(false);
   const [disabled, setDisabled] = useState<boolean>(true);
@@ -147,4 +147,4 @@ const CheckoutForm = ({ amount }: { amount: number }) => {
   );
 };
 
-export default CheckoutForm;
+export default PaymentForm;
