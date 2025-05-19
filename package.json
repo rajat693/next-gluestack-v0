@@ -43,6 +43,8 @@
     "@gluestack-ui/tooltip": "^0.1.38",
     "@gluestack/ui-next-adapter": "^2.1.12",
     "@legendapp/motion": "^2.4.0",
+    "@stripe/react-stripe-js": "^3.7.0",
+    "@stripe/stripe-js": "^7.3.0",
     "@vercel/kv": "^3.0.0",
     "autoprefixer": "^10.4.20",
     "nativewind": "^4.1.23",
@@ -55,7 +57,8 @@
     "react-native-css-interop": "^0.1.22",
     "react-native-safe-area-context": "^5.1.0",
     "react-native-svg": "^15.2.0",
-    "react-native-web": "^0.19.13"
+    "react-native-web": "^0.19.13",
+    "stripe": "^18.1.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
