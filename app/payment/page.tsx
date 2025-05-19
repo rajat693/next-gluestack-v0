@@ -2,9 +2,9 @@
 import React from "react";
 import { Elements } from "@stripe/react-stripe-js";
 import stripePromise from "@/lib/stripe";
-import CheckoutForm from "@/components/checkout-form";
+import PaymentForm from "@/components/payment-form";
 
-export default function Checkout() {
+export default function Payment() {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full bg-white rounded-xl shadow-lg overflow-hidden">
@@ -23,7 +23,7 @@ export default function Checkout() {
           </div>
 
           <Elements stripe={stripePromise}>
-            <CheckoutForm amount={19.99} />
+            <PaymentForm amount={19.99} />
           </Elements>
 
           <div className="mt-8 pt-6 border-t border-gray-200 text-center text-xs text-gray-500">

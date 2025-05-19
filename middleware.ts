@@ -5,7 +5,10 @@ import { getToken } from "next-auth/jwt";
 export async function middleware(request: NextRequest) {
   const token = await getToken({ req: request });
   const isAuthPage = request.nextUrl.pathname === "/";
-  const isProtectedRoute = request.nextUrl.pathname.startsWith("/dashboard");
+  const isProtectedRoute =
+    request.nextUrl.pathname.startsWith("/dashboard") ||
+    request.nextUrl.pathname.startsWith("/payment") ||
+    request.nextUrl.pathname.startsWith("/payment-success");
 
   if (isProtectedRoute && !token) {
     return NextResponse.redirect(new URL("/", request.url));
@@ -19,5 +22,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/dashboard/:path*"], // This configuration tells Next.js to only run this middleware on specific routes
+  matcher: ["/", "/dashboard/:path*", "/payment/:path*", "/payment-success"],
 };

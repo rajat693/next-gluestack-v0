@@ -1,7 +1,14 @@
-import Link from "next/link";
+"use client";
+import React from "react";
+import { useRouter } from "next/navigation";
 
-// app/payment-success/page.tsx
 export default function PaymentSuccess() {
+  const router = useRouter();
+
+  const handleReturnToDashboard = () => {
+    router.push("/dashboard");
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full bg-white rounded-xl shadow-lg overflow-hidden p-8 text-center">
@@ -26,16 +33,18 @@ export default function PaymentSuccess() {
         </h1>
 
         <p className="text-gray-600 mb-6">
-          Your payment has been processed successfully. A confirmation has been
-          sent to your email address.
+          Your payment has been processed successfully. Your account has been
+          upgraded with additional code generation queries.
         </p>
 
-        <Link
-          href="/"
-          className="text-indigo-600 hover:text-indigo-800 font-medium"
-        >
-          Return to Home
-        </Link>
+        <div className="flex flex-col space-y-3">
+          <button
+            onClick={handleReturnToDashboard}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+          >
+            Return to Dashboard
+          </button>
+        </div>
       </div>
     </div>
   );
