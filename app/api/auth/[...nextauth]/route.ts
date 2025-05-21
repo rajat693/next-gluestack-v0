@@ -34,12 +34,35 @@ const authOptions: NextAuthOptions = {
             }),
             queriesCountLeft: 1,
             isPaid: false,
+            freeQueryResetDate: new Date(
+              Date.now() + 30 * 24 * 60 * 60 * 1000
+            ).toLocaleString("en-US", {
+              timeZone: "Asia/Kolkata",
+            }),
           });
           console.log("New user saved to KV:", user.email);
         } else {
-          // Existing user - update last login
+          const currentDate = new Date();
+          const resetDate = new Date((existingUser as any).freeQueryResetDate);
+
+          let updatedUserData = { ...existingUser };
+
+          // If current date is past reset date, update the query count
+          if (currentDate > resetDate) {
+            updatedUserData = {
+              ...existingUser,
+              queriesCountLeft: 1,
+              freeQueryResetDate: new Date(
+                Date.now() + 30 * 24 * 60 * 60 * 1000
+              ).toLocaleString("en-US", {
+                timeZone: "Asia/Kolkata",
+              }),
+            };
+          }
+
+          // Update last login and any reset data
           await kv.set(key, {
-            ...existingUser,
+            ...updatedUserData,
             lastLogin: new Date().toLocaleString("en-US", {
               timeZone: "Asia/Kolkata",
             }),
