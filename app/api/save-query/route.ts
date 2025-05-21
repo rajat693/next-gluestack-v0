@@ -42,7 +42,9 @@ export async function POST(req: NextRequest) {
       id: Date.now().toString(), // Simple ID based on timestamp
       query,
       code: code || "",
-      createdAt: new Date().toISOString(),
+      createdAt: new Date().toLocaleString("en-US", {
+        timeZone: "Asia/Kolkata",
+      }),
     };
 
     // Get existing queries or create empty array

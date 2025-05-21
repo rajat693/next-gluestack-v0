@@ -62,8 +62,12 @@ export async function POST(request: NextRequest) {
             ...userData,
             queriesCountLeft: newQueriesCount, // Add 50 to the existing count
             isPaid: true,
-            updatedAt: new Date().toISOString(),
-            lastPaymentDate: new Date().toISOString(),
+            updatedAt: new Date().toLocaleString("en-US", {
+              timeZone: "Asia/Kolkata",
+            }),
+            lastPaymentDate: new Date().toLocaleString("en-US", {
+              timeZone: "Asia/Kolkata",
+            }),
           };
 
           // Save updated user data

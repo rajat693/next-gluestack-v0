@@ -374,11 +374,13 @@ export default function CodeGenerator() {
 
     try {
       const date = new Date(dateString);
-      return date.toLocaleDateString("en-US", {
+      return date.toLocaleString("en-US", {
+        timeZone: "Asia/Kolkata",
         month: "short",
         day: "numeric",
         hour: "numeric",
         minute: "2-digit",
+        hour12: true,
       });
     } catch (e) {
       console.error("Error formatting date:", e);

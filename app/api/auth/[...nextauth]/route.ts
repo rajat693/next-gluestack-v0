@@ -25,11 +25,13 @@ const authOptions: NextAuthOptions = {
         if (!existingUser) {
           // New user - save their data
           await kv.set(key, {
-            id: user.id,  //these 4 values are returned by the Google OAuth Provider
+            id: user.id, //these 4 values are returned by the Google OAuth Provider
             email: user.email,
             name: user.name,
             image: user.image,
-            createdAt: new Date().toISOString(),
+            createdAt: new Date().toLocaleString("en-US", {
+              timeZone: "Asia/Kolkata",
+            }),
             queriesCountLeft: 1,
             isPaid: false,
           });
@@ -38,7 +40,9 @@ const authOptions: NextAuthOptions = {
           // Existing user - update last login
           await kv.set(key, {
             ...existingUser,
-            lastLogin: new Date().toISOString(),
+            lastLogin: new Date().toLocaleString("en-US", {
+              timeZone: "Asia/Kolkata",
+            }),
           });
           console.log("Existing user login updated:", user.email);
         }
