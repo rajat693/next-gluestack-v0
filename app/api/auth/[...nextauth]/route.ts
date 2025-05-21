@@ -3,6 +3,64 @@ import GoogleProvider from "next-auth/providers/google";
 import { NextAuthOptions } from "next-auth";
 import { kv } from "@vercel/kv";
 
+// Types
+interface UserData {
+  id: string;
+  email: string;
+  name: string;
+  image: string;
+  createdAt: string;
+  queriesCountLeft: number;
+  isPaid: boolean;
+  freeQueryResetDate: string;
+  lastLogin?: string;
+}
+
+// Utility functions
+const getISTDate = (date: Date = new Date()) => {
+  return date.toLocaleString("en-US", {
+    timeZone: "Asia/Kolkata",
+  });
+};
+
+const getNextMonthDate = () => {
+  return new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+};
+
+const createNewUserData = (user: any): UserData => {
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    image: user.image,
+    createdAt: getISTDate(),
+    queriesCountLeft: 1,
+    isPaid: false,
+    freeQueryResetDate: getISTDate(getNextMonthDate()),
+  };
+};
+
+const updateExistingUserData = (existingUser: UserData): UserData => {
+  const currentDate = new Date();
+  const resetDate = new Date(existingUser.freeQueryResetDate);
+
+  // If reset date has passed, update the query count and reset date
+  if (currentDate > resetDate) {
+    return {
+      ...existingUser,
+      queriesCountLeft: 1,
+      freeQueryResetDate: getISTDate(getNextMonthDate()),
+      lastLogin: getISTDate(),
+    };
+  }
+
+  // Just update last login
+  return {
+    ...existingUser,
+    lastLogin: getISTDate(),
+  };
+};
+
 const authOptions: NextAuthOptions = {
   providers: [
     GoogleProvider({
@@ -16,57 +74,18 @@ const authOptions: NextAuthOptions = {
   callbacks: {
     async signIn({ user }) {
       try {
-        // Create a key using the user's email
         const key = `user:${user.email}`;
-
-        // Check if user already exists
-        const existingUser = await kv.get(key);
+        const existingUser = await kv.get<UserData>(key);
 
         if (!existingUser) {
           // New user - save their data
-          await kv.set(key, {
-            id: user.id, //these 4 values are returned by the Google OAuth Provider
-            email: user.email,
-            name: user.name,
-            image: user.image,
-            createdAt: new Date().toLocaleString("en-US", {
-              timeZone: "Asia/Kolkata",
-            }),
-            queriesCountLeft: 1,
-            isPaid: false,
-            freeQueryResetDate: new Date(
-              Date.now() + 30 * 24 * 60 * 60 * 1000
-            ).toLocaleString("en-US", {
-              timeZone: "Asia/Kolkata",
-            }),
-          });
+          const newUserData = createNewUserData(user);
+          await kv.set(key, newUserData);
           console.log("New user saved to KV:", user.email);
         } else {
-          const currentDate = new Date();
-          const resetDate = new Date((existingUser as any).freeQueryResetDate);
-
-          let updatedUserData = { ...existingUser };
-
-          // If current date is past reset date, update the query count
-          if (currentDate > resetDate) {
-            updatedUserData = {
-              ...existingUser,
-              queriesCountLeft: 1,
-              freeQueryResetDate: new Date(
-                Date.now() + 30 * 24 * 60 * 60 * 1000
-              ).toLocaleString("en-US", {
-                timeZone: "Asia/Kolkata",
-              }),
-            };
-          }
-
-          // Update last login and any reset data
-          await kv.set(key, {
-            ...updatedUserData,
-            lastLogin: new Date().toLocaleString("en-US", {
-              timeZone: "Asia/Kolkata",
-            }),
-          });
+          // Update existing user data
+          const updatedUserData = updateExistingUserData(existingUser);
+          await kv.set(key, updatedUserData);
           console.log("Existing user login updated:", user.email);
         }
       } catch (error) {
