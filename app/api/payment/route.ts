@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "../auth/[...nextauth]/route";
-import { kv } from "@vercel/kv";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
   apiVersion: "2025-04-30.basil", // Use the latest API version
@@ -45,41 +44,60 @@ export async function POST(request: NextRequest) {
     // If payment was successful, update the user's query count
     if (paymentIntent.status === "succeeded") {
       try {
-        // Get user data
-        const userKey = `user:${session.user.email}`;
-        const userData: any = await kv.get(userKey);
+        const queriesToAdd = 2;
 
-        if (userData) {
-          // Calculate the new queries count by adding 50 to the existing count
-          const currentCount = userData.queriesCountLeft || 0;
-          const newQueriesCount = currentCount + 2; // Add 50 queries
-
-          console.log("Current query count:", currentCount);
-          console.log("New query count after adding 50:", newQueriesCount);
-
-          // Update user data with increased queries and paid status
-          const updatedUserData = {
-            ...userData,
-            queriesCountLeft: newQueriesCount, // Add 50 to the existing count
-            isPaid: true,
-            updatedAt: new Date().toLocaleString("en-US", {
-              timeZone: "Asia/Kolkata",
+        // Call the update-query-count endpoint
+        const response = await fetch(
+          `${request.headers.get("origin")}/api/update-query-count`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              queriesToAdd,
             }),
-            lastPaymentDate: new Date().toLocaleString("en-US", {
-              timeZone: "Asia/Kolkata",
-            }),
-          };
+          }
+        );
 
-          // Save updated user data
-          await kv.set(userKey, updatedUserData);
+        const responseData = await response.json();
+
+        if (!response.ok) {
+          console.error(
+            "Failed to update query count after payment:",
+            responseData.error
+          );
+          return NextResponse.json(
+            {
+              success: false,
+              error: "Payment successful but failed to update query count",
+              paymentIntent: paymentIntent.id,
+            },
+            { status: 500 }
+          );
         }
+
+        // Return success with both payment and query update information
+        return NextResponse.json({
+          success: true,
+          client_secret: paymentIntent.client_secret,
+          queriesAdded: queriesToAdd,
+          paidQueryResetDate: responseData.paidQueryResetDate,
+        });
       } catch (updateError) {
         console.error("Error updating user query count:", updateError);
-        // Still return success, we'll handle this separately on the success page
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Payment successful but failed to update query count",
+            paymentIntent: paymentIntent.id,
+          },
+          { status: 500 }
+        );
       }
     }
 
-    // Return success response
+    // Return success response for payment intent creation
     return NextResponse.json({
       success: true,
       client_secret: paymentIntent.client_secret,
