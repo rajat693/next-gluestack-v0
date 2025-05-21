@@ -25,7 +25,7 @@ const authOptions: NextAuthOptions = {
         if (!existingUser) {
           // New user - save their data
           await kv.set(key, {
-            id: user.id,
+            id: user.id,  //these 4 values are returned by the Google OAuth Provider
             email: user.email,
             name: user.name,
             image: user.image,
@@ -44,7 +44,7 @@ const authOptions: NextAuthOptions = {
         }
       } catch (error) {
         console.error("KV Error:", error);
-        // Still allow sign in even if KV fails
+        // Still allow sign-in even if KV fails
       }
       return true;
     },
