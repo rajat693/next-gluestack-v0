@@ -46,6 +46,9 @@ export async function POST(request: NextRequest) {
       try {
         const queriesToAdd = 2;
 
+        // Get the session cookie
+        const cookies = request.headers.get("cookie") || "";
+
         // Call the update-query-count endpoint
         const response = await fetch(
           `${request.headers.get("origin")}/api/update-query-count`,
@@ -53,6 +56,7 @@ export async function POST(request: NextRequest) {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
+              Cookie: cookies, // Forward the session cookie
             },
             body: JSON.stringify({
               queriesToAdd,
